@@ -53,7 +53,6 @@ public class UserDaoHibernateImpl implements UserDao {
                 session.getTransaction().commit();
             } catch (Exception e) {
                 session.getTransaction().rollback();
-                throw new RuntimeException(e);
             }
         }
     }
