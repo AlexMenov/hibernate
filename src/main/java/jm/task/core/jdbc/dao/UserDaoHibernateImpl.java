@@ -2,95 +2,69 @@ package jm.task.core.jdbc.dao;
 
 import jm.task.core.jdbc.model.User;
 import jm.task.core.jdbc.util.Util;
+import jm.task.core.jdbc.util.Util.Action;
 import org.hibernate.Session;
-import org.hibernate.SessionFactory;
-import org.hibernate.query.Query;
 
 import java.util.ArrayList;
-import java.util.List;
 
 public class UserDaoHibernateImpl implements UserDao {
+    private ArrayList<User> allUsers = new ArrayList<>();
+
     public UserDaoHibernateImpl() {
     }
+
     @Override
     public void createUsersTable() {
-        try (Session session = Util.getConfig().openSession()) {
-            session.beginTransaction();
-            session
-                    .createNativeQuery("""
-            CREATE TABLE IF NOT EXISTS users.users (
-            id BIGINT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(50) NOT NULL, 
-            last_name VARCHAR(50) NOT NULL,
-            age INT NOT NULL                     
-            );
-            """)
-                    .executeUpdate();
-            session.getTransaction().commit();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        queryByAction(Action.CREATEUSERSTABLE, Action.NULLPARAMS);
     }
 
     @Override
     public void dropUsersTable() {
-        try (Session session = Util.getConfig().openSession()) {
-            session.beginTransaction();
-            session
-                    .createNativeQuery("DROP TABLE IF EXISTS users.users")
-                    .executeUpdate();
-            session.getTransaction().commit();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        queryByAction(Action.DROPUSERSTABLE, Action.NULLPARAMS);
     }
 
     @Override
     public void saveUser(String name, String lastName, byte age) {
-        try (Session session = Util.getConfig().openSession()) {
-            session.beginTransaction();
-            User user = new User(name, lastName, age);
-            session.save(user);
-            session.getTransaction().commit();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        User user = new User(name, lastName, age);
+        queryByAction(Action.SAVEUSER, user);
     }
 
     @Override
     public void removeUserById(long id) {
-        try (Session session = Util.getConfig().openSession()) {
-            session.beginTransaction();
-            User user = session.get(User.class, id);
-            session.delete(user);
-            session.getTransaction().commit();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        queryByAction(Action.REMOVEUSERBYID, id);
     }
 
     @Override
-    public List<User> getAllUsers() {
-        List<User> users = new ArrayList<>();
-        try (Session session = Util.getConfig().openSession()) {
-            session.beginTransaction();
-            Query<User> usersQueried = session.createQuery("from User", User.class);
-            usersQueried.getResultStream().forEach(users::add);
-            session.getTransaction().commit();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        return users;
+    public ArrayList<User> getAllUsers() {
+        queryByAction(Action.GETALLUSERS, Action.NULLPARAMS);
+        return allUsers;
     }
 
     @Override
     public void cleanUsersTable() {
+        queryByAction(Action.CLEANUSERSTABLE, Action.NULLPARAMS);
+    }
+
+    private void queryByAction(Action action, Object actionUserParam) {
         try (Session session = Util.getConfig().openSession()) {
             session.beginTransaction();
-            session.createQuery("DELETE from User").executeUpdate();
-            session.getTransaction().commit();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+            try {
+                routeByAction(session, action, actionUserParam);
+                session.getTransaction().commit();
+            } catch (Exception e) {
+                session.getTransaction().rollback();
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    private void routeByAction(Session session, Action action, Object actionUserParam) {
+        switch (action) {
+            case SAVEUSER -> session.save(actionUserParam);
+            case CLEANUSERSTABLE -> session.createQuery(action.getQuery()).executeUpdate();
+            case REMOVEUSERBYID -> session.delete(session.get(User.class, (long) actionUserParam));
+            case DROPUSERSTABLE, CREATEUSERSTABLE -> session.createNativeQuery(action.getQuery()).executeUpdate();
+            case GETALLUSERS -> allUsers = (ArrayList<User>) session.createQuery(action.getQuery(), User.class).list();
         }
     }
 }
